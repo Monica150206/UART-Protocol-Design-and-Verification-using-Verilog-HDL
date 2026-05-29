@@ -1,0 +1,182 @@
+module baud_gen(
+    input clk,
+    input reset,
+    output reg tick
+);
+
+integer count;
+
+always @(posedge clk or posedge reset)
+begin
+    if(reset)
+    begin
+        count <= 0;
+        tick <= 0;
+    end
+    else
+    begin
+        if(count == 3)
+        begin
+            count <= 0;
+            tick <= 1;
+        end
+        else
+        begin
+            count <= count + 1;
+            tick <= 0;
+        end
+    end
+end
+
+endmodule
+
+
+
+
+module uart_tx(
+    input clk,
+    input reset,
+    input tick,
+    input tx_start,
+    input [7:0] data_in,
+    output reg tx
+);
+
+reg [1:0] state;
+reg [2:0] bit_count;
+reg [7:0] data_reg;
+
+parameter IDLE = 0,
+          START = 1,
+          DATA = 2,
+          STOP = 3;
+
+always @(posedge clk or posedge reset)
+begin
+    if(reset)
+    begin
+        state <= IDLE;
+        tx <= 1;
+        bit_count <= 0;
+    end
+
+    else if(tick)
+    begin
+        case(state)
+
+        IDLE:
+        begin
+            tx <= 1;
+
+            if(tx_start)
+            begin
+                data_reg <= data_in;
+                state <= START;
+            end
+        end
+
+        START:
+        begin
+            tx <= 0;
+            bit_count <= 0;
+            state <= DATA;
+        end
+
+        DATA:
+        begin
+            tx <= data_reg[bit_count];
+
+            if(bit_count == 7)
+                state <= STOP;
+            else
+                bit_count <= bit_count + 1;
+        end
+
+        STOP:
+        begin
+            tx <= 1;
+            state <= IDLE;
+        end
+
+        endcase
+    end
+end
+
+endmodule
+
+
+
+
+module uart_rx(
+    input clk,
+    input reset,
+    input tick,
+    input rx,
+    output reg [7:0] data_out,
+    output reg data_ready
+);
+
+reg [1:0] state;
+reg [2:0] bit_count;
+
+parameter IDLE = 0,
+          START = 1,
+          DATA = 2,
+          STOP = 3;
+
+always @(posedge clk or posedge reset)
+begin
+    if(reset)
+    begin
+        state <= IDLE;
+        data_out <= 0;
+        data_ready <= 0;
+        bit_count <= 0;
+    end
+
+    else
+    begin
+        case(state)
+
+        IDLE:
+        begin
+            if(rx == 0)
+            begin
+                data_ready <= 0;
+                state <= START;
+            end
+        end
+
+        START:
+        begin
+            if(tick)
+            begin
+                bit_count <= 0;
+                state <= DATA;
+            end
+        end
+
+        DATA:
+        begin
+            if(tick)
+            begin
+                data_out[bit_count] <= rx;
+
+                if(bit_count == 7)
+                    state <= STOP;
+                else
+                    bit_count <= bit_count + 1;
+            end
+        end
+
+        STOP:
+        begin
+            data_ready <= 1;
+            state <= IDLE;
+        end
+
+        endcase
+    end
+end
+
+endmodule
